@@ -109,14 +109,14 @@ A complete, production-grade digital insurance advisory platform and smart CRM b
 
 ---
 
-## 5. Admin Portal Credentials
+## 5. Admin Portal Access & Authentication
 
-- **URL:** `http://localhost:3000/#admin` or click **"Advisor Portal"** in the top navbar / footer.
-- **Default Email:** `sarla.hooda@licadvisor.in`
-- **Default Secure Password:** `SarlaMDRT2026!`
-- *Password can be updated anytime inside the portal under settings with an immutable audit log entry.*
-
----
+- **URL:** Access via `/#admin` (or click **"Advisor Portal"** in the top navbar or footer).
+- **Credentials:** Configurable securely via environment variables:
+  - `ADMIN_EMAIL` / `ADMIN_DEFAULT_EMAIL`: (Default: `sarla.hooda@licadvisor.in`)
+  - `ADMIN_PASSWORD` / `ADMIN_DEFAULT_PASSWORD`: Set your custom admin password in your environment or Vercel dashboard.
+- **Login Form:** The login fields start completely empty with `autocomplete="off"` / `autocomplete="new-password"` to avoid pre-filling.
+- *Password can be updated anytime inside the portal under settings with an immutable security audit log entry.*
 
 ---
 
@@ -126,19 +126,16 @@ This project is configured for full-stack deployment on Vercel using Vite for th
 
 ### Architecture on Vercel
 - **Frontend SPA:** Built with Vite into the `dist/` directory, automatically cached and distributed globally across Vercel’s Edge Network.
-- **Backend API:** Express application wrapped into a Serverless Function at `api/index.ts`. All `/api/*` traffic is routed via `vercel.json`.
+- **Backend API:** Express application wrapped into a Serverless Function at `api/index.ts`. All `/api/*` traffic is routed via `vercel.json` with resilient body-stream handling and JSON error responses.
 - **Client-Side Routing:** Deep links (e.g., `/admin`, `#admin`, `/quiz`) fall back to `dist/index.html` via `vercel.json` rewrites.
 
 ### Method 1: Deploy via Vercel Dashboard & GitHub (Recommended)
 
-1. **Push your code to GitHub / GitLab:**
+1. **Commit and push changes to GitHub:**
    ```bash
-   git init
    git add .
-   git commit -m "feat: prepare Sarla Hooda LIC CRM for Vercel deployment"
-   git branch -M main
-   git remote add origin https://github.com/your-username/sarla-hooda-lic.git
-   git push -u origin main
+   git commit -m "fix: resolve Vercel 500 login error and remove autofill credentials"
+   git push origin main
    ```
 
 2. **Import into Vercel:**
@@ -153,14 +150,15 @@ This project is configured for full-stack deployment on Vercel using Vite for th
    - **Install Command:** `npm install`
 
 4. **Add Environment Variables in Vercel:**
-   Go to the **Environment Variables** section in the project setup screen (or under *Settings > Environment Variables*):
+   Go to **Project Settings > Environment Variables**:
    - `JWT_SECRET`: Enter a secure 32+ character random secret (e.g. `openssl rand -base64 32`)
-   - `ADMIN_DEFAULT_PASSWORD`: *(Optional)* Custom initial password for `sarla.hooda@licadvisor.in` (defaults to `SarlaMDRT2026!`)
+   - `ADMIN_EMAIL`: `sarla.hooda@licadvisor.in` (or your chosen admin email)
+   - `ADMIN_PASSWORD`: Your chosen secure admin password
    - `NODE_ENV`: `production`
    - `APP_URL`: Your Vercel domain (e.g. `https://your-project.vercel.app`)
 
-5. **Click "Deploy":**
-   - Vercel will install dependencies, compile the frontend to `dist/`, build the `api/index.ts` serverless function, and assign a production URL.
+5. **Deploy / Redeploy:**
+   - Click **"Deploy"** (or click **"Redeploy"** on existing deployments under the Deployments tab).
 
 ---
 

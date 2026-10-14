@@ -396,15 +396,16 @@ class DatabaseEngine {
 
   private getDefaultSchema(): AppDatabaseSchema {
     const salt = bcrypt.genSaltSync(10);
-    // Secure default password for Sarla Hooda admin login (configurable via ADMIN_DEFAULT_PASSWORD)
-    const initialPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'SarlaMDRT2026!';
+    // Configurable via ADMIN_DEFAULT_PASSWORD or ADMIN_PASSWORD (defaults to verified advisor credential)
+    const initialPassword = process.env.ADMIN_DEFAULT_PASSWORD || process.env.ADMIN_PASSWORD || 'SarlaMDRT2026!';
     const defaultPasswordHash = bcrypt.hashSync(initialPassword, salt);
+    const adminEmail = (process.env.ADMIN_DEFAULT_EMAIL || process.env.ADMIN_EMAIL || 'sarla.hooda@licadvisor.in').toLowerCase().trim();
 
     return {
       admins: [
         {
           id: 'admin_1',
-          email: 'sarla.hooda@licadvisor.in',
+          email: adminEmail,
           name: 'Sarla Hooda',
           role: 'Super Admin',
           passwordHash: defaultPasswordHash,
@@ -504,19 +505,50 @@ class DatabaseEngine {
           this.data = this.getDefaultSchema();
         }
         this.save();
-      } else {
-        this.save();
       }
+      this.syncAdminEnvCredentials();
       this.isInitialized = true;
     } catch (err) {
       console.warn('Notice: Initializing with default database schema:', err);
       this.data = this.getDefaultSchema();
+      this.syncAdminEnvCredentials();
       try {
         this.save();
       } catch {
         // Safe in strictly read-only environments
       }
       this.isInitialized = true;
+    }
+  }
+
+  /**
+   * Automatically synchronize primary admin account with environment variables if provided
+   */
+  private syncAdminEnvCredentials(): void {
+    const envPassword = process.env.ADMIN_DEFAULT_PASSWORD || process.env.ADMIN_PASSWORD;
+    const envEmail = (process.env.ADMIN_DEFAULT_EMAIL || process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+
+    if (!this.data.admins || this.data.admins.length === 0) {
+      this.data.admins = this.getDefaultSchema().admins;
+    }
+
+    const primaryAdmin = this.data.admins[0];
+    if (primaryAdmin) {
+      let changed = false;
+      if (envEmail && primaryAdmin.email.toLowerCase() !== envEmail) {
+        primaryAdmin.email = envEmail;
+        changed = true;
+      }
+      if (envPassword) {
+        const salt = bcrypt.genSaltSync(10);
+        primaryAdmin.passwordHash = bcrypt.hashSync(envPassword, salt);
+        primaryAdmin.failedAttempts = 0;
+        primaryAdmin.lockUntil = null;
+        changed = true;
+      }
+      if (changed) {
+        this.save();
+      }
     }
   }
 
@@ -694,6 +726,10 @@ class DatabaseEngine {
   }
 
   // --- Admin User Auth ---
+  public getAdmins(): StoredAdminUser[] {
+    return this.data.admins;
+  }
+
   public getAdminByEmail(email: string): StoredAdminUser | undefined {
     return this.data.admins.find(a => a.email.toLowerCase() === email.toLowerCase());
   }

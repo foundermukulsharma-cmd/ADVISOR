@@ -14,8 +14,9 @@ interface AdminLoginProps {
 }
 
 export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackToSite }) => {
-  const [email, setEmail] = useState('sarla.hooda@licadvisor.in');
-  const [password, setPassword] = useState('SarlaMDRT2026!');
+  // Empty initial fields - credentials must be entered manually by the administrator
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -71,16 +72,19 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+            <label htmlFor="admin_email" className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
               Admin Email
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
               <input
+                id="admin_email"
+                name="admin_email"
                 type="email"
                 required
+                autoComplete="off"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A46D] focus:border-transparent"
@@ -90,14 +94,17 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+            <label htmlFor="admin_password" className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
               Password
             </label>
             <div className="relative">
               <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
               <input
+                id="admin_password"
+                name="admin_password"
                 type={showPassword ? 'text' : 'password'}
                 required
+                autoComplete="new-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="w-full pl-10 pr-10 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#C5A46D] focus:border-transparent font-mono"
@@ -107,6 +114,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3.5 top-3.5 text-slate-400 hover:text-white"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -131,15 +139,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
           </div>
         </form>
 
-        {/* Security / Demo Credentials Box */}
+        {/* Security Reassurance */}
         <div className="mt-8 pt-5 border-t border-white/10 text-center">
-          <div className="p-3 bg-white/5 rounded-xl border border-white/10 text-xs text-slate-300 text-left space-y-1">
-            <p className="font-bold text-[#DFCA9B]">Verified Portal Credentials:</p>
-            <p><span className="text-slate-400">Email:</span> sarla.hooda@licadvisor.in</p>
-            <p><span className="text-slate-400">Password:</span> SarlaMDRT2026!</p>
-          </div>
-          <p className="text-[11px] text-slate-500 mt-3">
-            Protected by bcrypt hashing & brute-force account lockout.
+          <p className="text-[11px] text-slate-400">
+            Protected by bcrypt password hashing, session tokens & brute-force account lockout.
           </p>
         </div>
 

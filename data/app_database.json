@@ -5,11 +5,11 @@
       "email": "sarla.hooda@licadvisor.in",
       "name": "Sarla Hooda",
       "role": "Super Admin",
-      "passwordHash": "$2b$10$UMlD5h/AMLL2jrRQ9EpyK.YoOxwGafs.8t.IQnrjiCmCUofgK0/7S",
+      "passwordHash": "$2b$10$X2Rug3w6NpUm/QRDbb.ccuhfqOWheHPR0w/WVlbxwkW5RFWIRc8wC",
       "failedAttempts": 0,
       "lockUntil": null,
       "createdAt": "2026-10-14T12:46:13.824Z",
-      "lastLoginAt": "2026-10-14T13:14:05.810Z"
+      "lastLoginAt": "2026-10-14T13:54:38.563Z"
     }
   ],
   "leads": [
@@ -478,9 +478,129 @@
       },
       "id": "evt_1791983192155_u3h2",
       "timestamp": "2026-10-14T13:06:32.155Z"
+    },
+    {
+      "eventType": "page_view",
+      "source": "browser",
+      "language": "en",
+      "metadata": {
+        "path": "/"
+      },
+      "id": "evt_1791983730615_gzfh",
+      "timestamp": "2026-10-14T13:15:30.615Z"
+    },
+    {
+      "eventType": "page_view",
+      "source": "browser",
+      "language": "en",
+      "metadata": {
+        "path": "/"
+      },
+      "id": "evt_1791983894319_z3ck",
+      "timestamp": "2026-10-14T13:18:14.319Z"
+    },
+    {
+      "eventType": "page_view",
+      "source": "browser",
+      "language": "en",
+      "metadata": {
+        "path": "/"
+      },
+      "id": "evt_1791983899664_pljb",
+      "timestamp": "2026-10-14T13:18:19.664Z"
     }
   ],
   "auditLogs": [
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_SUCCESS",
+      "targetResource": "Authentication",
+      "details": "Admin user authenticated successfully.",
+      "id": "aud_1791986078563_qxhl",
+      "timestamp": "2026-10-14T13:54:38.563Z"
+    },
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_SUCCESS",
+      "targetResource": "Authentication",
+      "details": "Admin user authenticated successfully.",
+      "id": "aud_1791986059445_d54d",
+      "timestamp": "2026-10-14T13:54:19.445Z"
+    },
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_FAILED",
+      "targetResource": "Authentication",
+      "details": "Failed login attempt (1/5)",
+      "id": "aud_1791986026455_2v7p",
+      "timestamp": "2026-10-14T13:53:46.455Z"
+    },
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_FAILED",
+      "targetResource": "Authentication",
+      "details": "Failed login attempt (1/5)",
+      "id": "aud_1791986017396_odui",
+      "timestamp": "2026-10-14T13:53:37.396Z"
+    },
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_FAILED",
+      "targetResource": "Authentication",
+      "details": "Failed login attempt (5/5)",
+      "id": "aud_1791985977636_ugoj",
+      "timestamp": "2026-10-14T13:52:57.636Z"
+    },
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_FAILED",
+      "targetResource": "Authentication",
+      "details": "Failed login attempt (4/5)",
+      "id": "aud_1791985967079_5uwv",
+      "timestamp": "2026-10-14T13:52:47.079Z"
+    },
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_FAILED",
+      "targetResource": "Authentication",
+      "details": "Failed login attempt (3/5)",
+      "id": "aud_1791985934338_p6j4",
+      "timestamp": "2026-10-14T13:52:14.338Z"
+    },
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_FAILED",
+      "targetResource": "Authentication",
+      "details": "Failed login attempt (2/5)",
+      "id": "aud_1791985921080_0w4q",
+      "timestamp": "2026-10-14T13:52:01.080Z"
+    },
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_FAILED",
+      "targetResource": "Authentication",
+      "details": "Failed login attempt (1/5)",
+      "id": "aud_1791985435764_nlxx",
+      "timestamp": "2026-10-14T13:43:55.764Z"
+    },
+    {
+      "adminId": "admin_1",
+      "adminEmail": "sarla.hooda@licadvisor.in",
+      "action": "LOGIN_SUCCESS",
+      "targetResource": "Authentication",
+      "details": "Admin user authenticated successfully.",
+      "id": "aud_1791984667271_2j5g",
+      "timestamp": "2026-10-14T13:31:07.271Z"
+    },
     {
       "adminId": "admin_1",
       "adminEmail": "sarla.hooda@licadvisor.in",

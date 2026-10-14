@@ -54,9 +54,20 @@ async function fetchJson<T>(url: string, options: RequestInit = {}): Promise<T> 
   if (!res.ok) {
     let errorMsg = `Server error ${res.status}`;
     try {
-      const errData = await res.json();
-      if (errData && errData.error) {
-        errorMsg = errData.error;
+      const text = await res.text();
+      try {
+        const errData = JSON.parse(text);
+        if (errData && errData.error) {
+          errorMsg = errData.error;
+        } else if (errData && errData.message) {
+          errorMsg = errData.message;
+        }
+      } catch {
+        if (text && text.trim().length > 0 && text.length < 200 && !text.includes('<html')) {
+          errorMsg = text.trim();
+        } else if (res.status === 500) {
+          errorMsg = 'Server encountered an error. Please verify backend environment configuration.';
+        }
       }
     } catch (e) {
       // ignore

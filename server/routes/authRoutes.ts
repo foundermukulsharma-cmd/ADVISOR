@@ -14,14 +14,16 @@ export const authRouter = Router();
  */
 authRouter.post('/login', async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body;
+    const body = req.body || {};
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
 
     if (!email || !password) {
       res.status(400).json({ error: 'Email and password are required.' });
       return;
     }
 
-    const result = await authenticateAdmin(email.trim(), password);
+    const result = await authenticateAdmin(email, password);
 
     if (!result.success) {
       res.status(401).json({
@@ -36,9 +38,9 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       token: result.token,
       user: result.user
     });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Server authentication error.' });
+  } catch (error: any) {
+    console.error('[Login Route Error]:', error);
+    res.status(500).json({ error: error?.message || 'Server authentication error.' });
   }
 });
 
