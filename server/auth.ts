@@ -9,7 +9,17 @@ import bcrypt from 'bcryptjs';
 import { db, StoredAdminUser } from './db';
 import { UserRole } from '../src/types';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sarla-hooda-lic-secure-token-secret-2026';
+export function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[SECURITY WARNING] JWT_SECRET is not configured in process.env! Please configure a secure JWT_SECRET in Vercel Environment Variables.');
+    }
+    return 'sarla-hooda-lic-secure-token-secret-2026';
+  }
+  return secret;
+}
+
 const TOKEN_EXPIRY = '24h';
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -31,14 +41,14 @@ export function generateToken(user: StoredAdminUser): string {
       name: user.name,
       role: user.role
     },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: TOKEN_EXPIRY }
   );
 }
 
 export function verifyToken(token: string): any {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, getJwtSecret());
   } catch (err) {
     return null;
   }

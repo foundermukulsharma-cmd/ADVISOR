@@ -16,8 +16,11 @@ import {
   AdminUser
 } from '../src/types';
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
+// Support Vercel / AWS Lambda serverless read-only filesystem by routing to /tmp
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DATA_DIR = isServerless ? path.join('/tmp', 'sarla_crm_data') : path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'app_database.json');
+const BUNDLED_DB_FILE = path.resolve(process.cwd(), 'data', 'app_database.json');
 
 export interface StoredAdminUser extends AdminUser {
   passwordHash: string;
@@ -46,7 +49,7 @@ const initialWebsiteContent: WebsiteContent = {
     whatsapp: '+91 93503 04831',
     emailPlaceholder: 'sarla.licadvisor@example.com',
     officeAddressPlaceholder: 'Serving Rohtak, Jhajjar, Delhi NCR & Nationwide Clients',
-    photoUrl: '/src/assets/images/sarla_hooda_portrait_1791952882178.jpg',
+    photoUrl: '/images/sarla_hooda_portrait.jpg',
     heroHeadlineEn: "Your Family’s Future Deserves Thoughtful Protection.",
     heroHeadlineHi: "आपके परिवार का भविष्य सही सुरक्षा का हकदार है।",
     heroSubtitleEn: "Personalized life insurance, retirement pension security, and children's higher education corpus advised by MDRT Qualified LIC Consultant Sarla Hooda.",
@@ -393,8 +396,9 @@ class DatabaseEngine {
 
   private getDefaultSchema(): AppDatabaseSchema {
     const salt = bcrypt.genSaltSync(10);
-    // Default secure password for Sarla Hooda admin login: SarlaMDRT2026!
-    const defaultPasswordHash = bcrypt.hashSync('SarlaMDRT2026!', salt);
+    // Secure default password for Sarla Hooda admin login (configurable via ADMIN_DEFAULT_PASSWORD)
+    const initialPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'SarlaMDRT2026!';
+    const defaultPasswordHash = bcrypt.hashSync(initialPassword, salt);
 
     return {
       admins: [
@@ -487,14 +491,31 @@ class DatabaseEngine {
           ...this.getDefaultSchema(),
           ...parsed
         };
+      } else if (isServerless && fs.existsSync(BUNDLED_DB_FILE)) {
+        // In serverless, load pre-bundled seed database into /tmp
+        try {
+          const bundledContent = fs.readFileSync(BUNDLED_DB_FILE, 'utf-8');
+          const parsed = JSON.parse(bundledContent);
+          this.data = {
+            ...this.getDefaultSchema(),
+            ...parsed
+          };
+        } catch {
+          this.data = this.getDefaultSchema();
+        }
+        this.save();
       } else {
         this.save();
       }
       this.isInitialized = true;
     } catch (err) {
-      console.error('Error loading database file, initializing default:', err);
+      console.warn('Notice: Initializing with default database schema:', err);
       this.data = this.getDefaultSchema();
-      this.save();
+      try {
+        this.save();
+      } catch {
+        // Safe in strictly read-only environments
+      }
       this.isInitialized = true;
     }
   }
@@ -510,7 +531,7 @@ class DatabaseEngine {
       fs.renameSync(tempFile, DB_FILE);
       return true;
     } catch (err) {
-      console.error('Failed to atomically write database file:', err);
+      console.warn('Warning: Database write to disk skipped (changes kept in-memory):', err);
       return false;
     }
   }

@@ -32,7 +32,7 @@ const defaultContent: WebsiteContent = {
     whatsapp: '+91 93503 04831',
     emailPlaceholder: 'sarla.licadvisor@example.com',
     officeAddressPlaceholder: 'Serving Rohtak, Jhajjar, Delhi NCR & Nationwide Clients',
-    photoUrl: '/src/assets/images/sarla_hooda_portrait_1791952882178.jpg',
+    photoUrl: '/images/sarla_hooda_portrait.jpg',
     heroHeadlineEn: "Your Family’s Future Deserves Thoughtful Protection.",
     heroHeadlineHi: "आपके परिवार का भविष्य सही सुरक्षा का हकदार है।",
     heroSubtitleEn: "Personalized life insurance, retirement pension security, and children's higher education corpus advised by MDRT Qualified LIC Consultant Sarla Hooda.",
@@ -223,10 +223,24 @@ export default function App() {
     // Track real page visit
     api.trackEvent('page_view', { path: window.location.pathname }, 'browser', language);
 
-    // Check if user navigated to /admin in URL hash or query
-    if (window.location.hash === '#admin' || window.location.pathname.startsWith('/admin')) {
-      setViewMode('admin');
-    }
+    // Check if user navigated to /admin in URL hash or path
+    const checkViewFromUrl = () => {
+      if (window.location.hash === '#admin' || window.location.pathname.startsWith('/admin')) {
+        setViewMode('admin');
+      } else {
+        setViewMode('public');
+      }
+    };
+
+    checkViewFromUrl();
+
+    window.addEventListener('popstate', checkViewFromUrl);
+    window.addEventListener('hashchange', checkViewFromUrl);
+
+    return () => {
+      window.removeEventListener('popstate', checkViewFromUrl);
+      window.removeEventListener('hashchange', checkViewFromUrl);
+    };
   }, []);
 
   const handleLanguageChange = (newLang: Language) => {
@@ -234,6 +248,20 @@ export default function App() {
     try {
       localStorage.setItem('sarla_hooda_lang', newLang);
     } catch {}
+  };
+
+  const handleOpenAdmin = () => {
+    setViewMode('admin');
+    if (window.location.hash !== '#admin' && !window.location.pathname.startsWith('/admin')) {
+      window.history.pushState(null, '', '#admin');
+    }
+  };
+
+  const handleBackToSite = () => {
+    setViewMode('public');
+    if (window.location.hash === '#admin' || window.location.pathname.startsWith('/admin')) {
+      window.history.pushState(null, '', '/');
+    }
   };
 
   const scrollToSection = (id: string) => {
@@ -261,7 +289,7 @@ export default function App() {
     <div className="min-h-screen bg-[#F7F6F2] text-[#10243A]">
       {viewMode === 'admin' ? (
         <AdminPortal
-          onBackToSite={() => setViewMode('public')}
+          onBackToSite={handleBackToSite}
           language={language}
           onLanguageChange={handleLanguageChange}
           content={content}
@@ -277,7 +305,7 @@ export default function App() {
             language={language}
             onLanguageChange={handleLanguageChange}
             content={content}
-            onOpenAdmin={() => setViewMode('admin')}
+            onOpenAdmin={handleOpenAdmin}
             onOpenConsultation={() => scrollToSection('contact')}
           />
 

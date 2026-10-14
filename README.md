@@ -118,27 +118,93 @@ A complete, production-grade digital insurance advisory platform and smart CRM b
 
 ---
 
-## 6. Vercel & Production Deployment
+---
 
-### Option A: Vercel Deployment (Full-Stack / Serverless)
-1. Push repository to GitHub/GitLab.
-2. Import project into Vercel.
-3. Build Command: `npm run build`
-4. Output Directory: `dist`
-5. Configure Environment Variables in Vercel Dashboard:
-   - `JWT_SECRET`: Random 32+ character string
+## 6. Vercel Deployment Guide
+
+This project is configured for full-stack deployment on Vercel using Vite for the static frontend and Vercel Serverless Functions (`api/index.ts`) for the Express backend API.
+
+### Architecture on Vercel
+- **Frontend SPA:** Built with Vite into the `dist/` directory, automatically cached and distributed globally across Vercel’s Edge Network.
+- **Backend API:** Express application wrapped into a Serverless Function at `api/index.ts`. All `/api/*` traffic is routed via `vercel.json`.
+- **Client-Side Routing:** Deep links (e.g., `/admin`, `#admin`, `/quiz`) fall back to `dist/index.html` via `vercel.json` rewrites.
+
+### Method 1: Deploy via Vercel Dashboard & GitHub (Recommended)
+
+1. **Push your code to GitHub / GitLab:**
+   ```bash
+   git init
+   git add .
+   git commit -m "feat: prepare Sarla Hooda LIC CRM for Vercel deployment"
+   git branch -M main
+   git remote add origin https://github.com/your-username/sarla-hooda-lic.git
+   git push -u origin main
+   ```
+
+2. **Import into Vercel:**
+   - Log in to your [Vercel Dashboard](https://vercel.com/dashboard).
+   - Click **"Add New Project"** > **"Import Git Repository"**.
+   - Select your repository.
+
+3. **Configure Project Settings in Vercel:**
+   - **Framework Preset:** `Vite` (automatically detected)
+   - **Build Command:** `npm run build` (or `vite build`)
+   - **Output Directory:** `dist`
+   - **Install Command:** `npm install`
+
+4. **Add Environment Variables in Vercel:**
+   Go to the **Environment Variables** section in the project setup screen (or under *Settings > Environment Variables*):
+   - `JWT_SECRET`: Enter a secure 32+ character random secret (e.g. `openssl rand -base64 32`)
+   - `ADMIN_DEFAULT_PASSWORD`: *(Optional)* Custom initial password for `sarla.hooda@licadvisor.in` (defaults to `SarlaMDRT2026!`)
    - `NODE_ENV`: `production`
+   - `APP_URL`: Your Vercel domain (e.g. `https://your-project.vercel.app`)
 
-### Option B: Cloud Run / Docker / VPS Deployment
-1. Build frontend assets:
+5. **Click "Deploy":**
+   - Vercel will install dependencies, compile the frontend to `dist/`, build the `api/index.ts` serverless function, and assign a production URL.
+
+---
+
+### Method 2: Deploy via Vercel CLI
+
+1. Install the Vercel CLI globally:
+   ```bash
+   npm install -g vercel
+   ```
+
+2. Log in and deploy from project root:
+   ```bash
+   vercel
+   ```
+
+3. Deploy to production:
+   ```bash
+   vercel --prod
+   ```
+
+---
+
+### Data Persistence on Vercel Serverless
+
+- **Current Implementation:** On Vercel, the application automatically redirects local filesystem writes to `/tmp/sarla_crm_data/app_database.json`. This prevents `EROFS: read-only file system` crashes and allows full in-memory CRM interaction.
+- **Serverless Ephemeral Storage Notice:** Serverless functions on Vercel are stateless and recycle when cold-starting. Changes written to `/tmp` persist during active container instances but reset on new deployments or fresh container spins.
+- **Production Database Recommendation:** For permanent multi-instance data persistence on Vercel, connect an external managed database:
+  - **Relational SQL (PostgreSQL):** [Neon](https://neon.tech), [Supabase](https://supabase.com), or [Vercel Postgres].
+  - **NoSQL / Document:** [MongoDB Atlas] or [Upstash Redis].
+  The repository is structured with clean service layers (`server/db.ts` and `server/routes/`), allowing straightforward migration of query methods to your preferred database driver or ORM (such as Drizzle or Prisma).
+
+---
+
+### Alternative Self-Hosted Deployment (Cloud Run, Docker, VPS)
+To deploy as a continuous Node.js process instead of serverless:
+1. Build frontend:
    ```bash
    npm run build
    ```
-2. Start server in production mode:
+2. Start continuous server:
    ```bash
    npm run start
    ```
-3. Exposes port `3000` (or configured `$PORT`).
+   The server binds to port `3000` (or the environment `$PORT`). In this mode, `data/app_database.json` persists on persistent volumes.
 
 ---
 
