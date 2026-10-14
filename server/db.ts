@@ -1,0 +1,696 @@
+/**
+ * Persistent Database Engine for Sarla Hooda LIC Platform
+ * Handles storage, atomic writes, transactions, seed data, and schema integrity.
+ */
+
+import fs from 'fs';
+import path from 'path';
+import bcrypt from 'bcryptjs';
+import {
+  CustomerLead,
+  LeadActivity,
+  MessageTemplate,
+  WebsiteContent,
+  AuditLogEntry,
+  AnalyticsEvent,
+  AdminUser
+} from '../src/types';
+
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'app_database.json');
+
+export interface StoredAdminUser extends AdminUser {
+  passwordHash: string;
+  failedAttempts: number;
+  lockUntil: number | null;
+}
+
+export interface AppDatabaseSchema {
+  admins: StoredAdminUser[];
+  leads: CustomerLead[];
+  activities: LeadActivity[];
+  messageTemplates: MessageTemplate[];
+  websiteContent: WebsiteContent;
+  analyticsEvents: AnalyticsEvent[];
+  auditLogs: AuditLogEntry[];
+}
+
+// Initial verified content
+const initialWebsiteContent: WebsiteContent = {
+  advisor: {
+    name: 'Sarla Hooda',
+    profession: 'LIC Insurance Advisor',
+    achievement: 'MDRT Qualified',
+    clientBase: '700+ clients',
+    phone: '+91 93503 04831',
+    whatsapp: '+91 93503 04831',
+    emailPlaceholder: 'sarla.licadvisor@example.com',
+    officeAddressPlaceholder: 'Serving Rohtak, Jhajjar, Delhi NCR & Nationwide Clients',
+    photoUrl: '/src/assets/images/sarla_hooda_portrait_1791952882178.jpg',
+    heroHeadlineEn: "Your Family’s Future Deserves Thoughtful Protection.",
+    heroHeadlineHi: "आपके परिवार का भविष्य सही सुरक्षा का हकदार है।",
+    heroSubtitleEn: "Personalized life insurance, retirement pension security, and children's higher education corpus advised by MDRT Qualified LIC Consultant Sarla Hooda.",
+    heroSubtitleHi: "एमडीआरटी योग्य एलआईसी सलाहकार सरला हुड्डा द्वारा आपके परिवार की जीवन सुरक्षा, सेवानिवृत्ति और बच्चों की उच्च शिक्षा के लिए सोच-समझकर बनाई गई योजनाएँ।",
+    aboutTextEn: "Sarla Hooda is an MDRT (Million Dollar Round Table) qualified Life Insurance Corporation of India (LIC) advisor with a dedicated portfolio of over 700 protected families. Her advisory philosophy is grounded in transparent guidance, lifelong policy servicing, and reliable assistance during claims.",
+    aboutTextHi: "सरला हुड्डा भारतीय जीवन बीमा निगम (एलआईसी) की एमडीआरटी (Million Dollar Round Table) क्वालिफाइड सलाहकार हैं, जिनके मार्गदर्शन में 700 से अधिक परिवार वित्तीय रूप से सुरक्षित हैं। उनका उद्देश्य भ्रामक वादों से दूर रहकर हर परिवार को सही योजना और क्लेम के समय व्यक्तिगत सहयोग प्रदान करना है।",
+    coldLeadDaysThreshold: 14,
+    publicUrl: 'https://ais-dev-3teugagfw6qfy6yc6z4dij-101299270981.asia-southeast1.run.app'
+  },
+  services: [
+    {
+      id: 'srv_1',
+      titleEn: 'Term & Pure Life Protection',
+      titleHi: 'टर्म व पूर्ण जीवन सुरक्षा योजना',
+      taglineEn: 'Maximum financial shield for your dependents',
+      taglineHi: 'आपके आश्रितों के लिए सबसे बड़ा सुरक्षा कवच',
+      descEn: 'Affordable high-coverage life insurance ensuring your family’s lifestyle, home loan clearance, and dignity remain intact in unforeseen events.',
+      descHi: 'किफायती प्रीमियम में बड़ा लाइफ कवर ताकि किसी भी अनहोनी की स्थिति में परिवार की आर्थिक स्थिति, बच्चों की परवरिश और घर का खर्च सुरक्षित रहे।',
+      licCategories: ['LIC Tech Term', 'LIC Yuva Term', 'LIC Jeevan Amar'],
+      keyHighlightsEn: ['High sum assured at optimal premium', 'Accidental death & disability riders available', 'Smoker/non-smoker differentiated rates'],
+      keyHighlightsHi: ['किफायती दर पर उच्च सुरक्षा राशि', 'दुर्घटना लाभ एवं डिसेबिलिटी राइडर उपलब्ध', 'महिला प्रस्तावकों के लिए विशेष रियायती दरें'],
+      icon: 'ShieldCheck',
+      badge: 'High Priority'
+    },
+    {
+      id: 'srv_2',
+      titleEn: "Child Future & Higher Education",
+      titleHi: "बच्चों का भविष्य व उच्च शिक्षा कोष",
+      taglineEn: "Guaranteed milestones for university and career",
+      taglineHi: "कॉलेज, विदेश पढ़ाई और करियर के लिए समय पर फंड",
+      descEn: 'Disciplined savings with Premium Waiver Benefit (PWB) ensuring your child’s educational fund matures as planned even if the parent is not around.',
+      descHi: 'प्रीमियम वेवर बेनिफिट (PWB) के साथ अनुशासित योजना, जिससे माता-पिता के न रहने पर भी बच्चे की शिक्षा और भविष्य का फंड समय पर मिलता है।',
+      licCategories: ['LIC Amritbaal', 'LIC Jeevan Tarun', 'LIC SIIP'],
+      keyHighlightsEn: ['Premium waiver benefit if guardian passes away', 'Guaranteed maturity additions', 'Flexible payout options tailored to college years'],
+      keyHighlightsHi: ['अभिभावक के न रहने पर भविष्य के सभी प्रीमियम माफ', 'सुनिश्चित बोनस व मैच्योरिटी लाभ', 'उच्च शिक्षा के वर्षों के अनुसार किस्तों में भुगतान'],
+      icon: 'GraduationCap',
+      badge: 'Popular'
+    },
+    {
+      id: 'srv_3',
+      titleEn: 'Retirement & Guaranteed Lifelong Pension',
+      titleHi: 'सेवानिवृत्ति व आजीवन निश्चित पेंशन',
+      taglineEn: 'Dignified monthly income with zero market risk',
+      taglineHi: 'बिना किसी बाजार जोखिम के हर महीने सम्मानजनक पेंशन',
+      descEn: 'Lock in guaranteed lifelong annuities with return of purchase price to nominees, protecting your independence throughout retired life.',
+      descHi: 'सेवानिवृत्ति के बाद हर महीने निश्चित पेंशन ताकि आपको कभी किसी के आगे हाथ न फैलाना पड़े, साथ ही नॉमिनी को मूलधन वापसी की सुविधा।',
+      licCategories: ['LIC Saral Pension', 'LIC Jeevan Shanti', 'LIC Jeevan Utsav'],
+      keyHighlightsEn: ['Guaranteed annuity rates locked for life', 'Single premium or regular savings options', 'Joint life annuity with spouse coverage'],
+      keyHighlightsHi: ['आजीवन एक समान निश्चित पेंशन दर', 'एकमुश्त या नियमित किस्तों में निवेश की सुविधा', 'पति-पत्नी के लिए संयुक्त पेंशन विकल्प'],
+      icon: 'Coins',
+      badge: 'Recommended'
+    },
+    {
+      id: 'srv_4',
+      titleEn: 'Guaranteed Savings & Endowment',
+      titleHi: 'सुरक्षित बचत व एंडोमेंट योजनाएँ',
+      taglineEn: 'Wealth accumulation with safe sovereign backing',
+      taglineHi: 'संप्रभु गारंटी के साथ सुरक्षित धन वृद्धि',
+      descEn: 'Traditional endowment plans combining safe capital growth, annual declared bonuses, and long-term liquidity for family milestones.',
+      descHi: 'सुरक्षित पूंजी वृद्धि, वार्षिक बोनस और आपातकालीन जरूरतों के लिए लोन सुविधा के साथ विश्वसनीय पारंपरिक योजनाएँ।',
+      licCategories: ['LIC Jeevan Labh', 'LIC Jeevan Umang', 'LIC Bima Jyoti'],
+      keyHighlightsEn: ['Limited premium payment options', 'Government sovereign guarantee on sum assured', 'Policy loan facility available after 2 years'],
+      keyHighlightsHi: ['सीमित वर्षों तक ही प्रीमियम भरने की सुविधा', 'पॉलिसी पर भारत सरकार की संप्रभु गारंटी', '2 वर्ष बाद आसान पॉलिसी लोन सुविधा'],
+      icon: 'PiggyBank'
+    },
+    {
+      id: 'srv_5',
+      titleEn: 'Policy Servicing & Claims Assistance',
+      titleHi: 'पॉलिसी सर्विसिंग व क्लेम सहायता',
+      taglineEn: 'End-to-end guidance for existing and old policies',
+      taglineHi: 'पुरानी पॉलिसियों के लिए संपूर्ण सहायता',
+      descEn: 'Assistance with revival of lapsed policies, nominee updates, NEFT registration, maturity settlements, and seamless death claim documentation.',
+      descHi: 'बंद पड़ी पॉलिसी को दोबारा चालू करना, नॉमिनी का नाम बदलना, बैंक खाता (NEFT) जोड़ना, मैच्योरिटी और क्लेम दस्तावेजों में पूर्ण सहायता।',
+      licCategories: ['Maturity Claim', 'Nominee Death Claim', 'Policy Revival', 'NEFT Setup'],
+      keyHighlightsEn: ['Doorstep document collection where feasible', 'Status verification on official portal', 'Zero hassle claim resolution'],
+      keyHighlightsHi: ['घर बैठे दस्तावेजों की जांच व मार्गदर्शन', 'पोर्टल पर तुरंत पॉलिसी स्टेटस जांच', 'क्लेम के समय परिजनों को व्यक्तिगत सहयोग'],
+      icon: 'FileHeart'
+    }
+  ],
+  faqs: [
+    {
+      id: 'faq_1',
+      category: 'General',
+      questionEn: 'How can Sarla Hooda help me choose the right LIC policy?',
+      questionHi: 'सरला हुड्डा मुझे सही एलआईसी पॉलिसी चुनने में कैसे मदद करती हैं?',
+      answerEn: 'As an MDRT-qualified consultant, Sarla conducts a thorough financial need analysis based on your age, dependents, cash flow, and timeline. She recommends specific categories without pushy sales tactics or unrealistic return promises.',
+      answerHi: 'एक एमडीआरटी क्वालिफाइड सलाहकार के रूप में, सरला जी आपकी उम्र, परिवार की जिम्मेदारी, आय और समय सीमा का विश्लेषण करती हैं। वह बिना किसी दबाव या झूठे वादों के आपकी जरूरत के अनुसार सही योजना सुझाती हैं।'
+    },
+    {
+      id: 'faq_2',
+      category: 'Servicing',
+      questionEn: 'Can Sarla Hooda assist me with an existing LIC policy bought elsewhere?',
+      questionHi: 'क्या सरla जी मेरी पहले से चल रही पुरानी एलआईसी पॉलिसी में मदद कर सकती हैं?',
+      answerEn: 'Yes! Sarla regularly helps policyholders with revival of lapsed policies, change of address, nominee registration, loan against policy, and maturity claim processing regardless of where you originally purchased it.',
+      answerHi: 'जी हाँ! यदि आपकी कोई पुरानी पॉलिसी बंद हो गई है, पता बदलना है, नॉमिनी का नाम जोड़ना है, पॉलिसी पर लोन लेना है या मैच्योरिटी क्लेम लेना है, तो सरला जी आपकी पूरी सहायता करेंगी।'
+    },
+    {
+      id: 'faq_3',
+      category: 'Claims',
+      questionEn: 'What happens during a claim settlement? Does the advisor assist in person?',
+      questionHi: 'क्लेम के समय क्या होता है? क्या सलाहकार व्यक्तिगत सहायता प्रदान करती हैं?',
+      answerEn: 'Claim assistance is the hallmark of Sarla Hooda’s service. In the unfortunate event of a claim or upon policy maturity, she personally guides the family with document verification, submission to the branch, and follow-up until the settlement is credited directly to the nominee’s bank account.',
+      answerHi: 'क्लेम के समय परिवार की मदद करना सरला हुड्डा की सबसे बड़ी प्राथमिकता है। किसी भी अनहोनी या मैच्योरिटी के समय वह आवश्यक दस्तावेज तैयार करवाने से लेकर बैंक खाते में राशि आने तक पूरा मार्गदर्शन करती हैं।'
+    },
+    {
+      id: 'faq_4',
+      category: 'Returns',
+      questionEn: 'Are returns and benefits guaranteed in LIC policies?',
+      questionHi: 'क्या एलआईसी पॉलिसियों में मिलने वाला लाभ सुनिश्चित होता है?',
+      answerEn: 'Benefits depend on the specific plan chosen. Non-participating plans (like term plans, fixed annuity pension, or guaranteed addition plans) have exact guaranteed payouts stated in the policy bond. Participating plans include bonuses declared annually by LIC.',
+      answerHi: 'लाभ योजना के प्रकार पर निर्भर करता है। गारंटीड योजनाओं (जैसे सरल पेंशन, टर्म प्लान या जीवन उत्सव) में नियम पॉलिसी बॉन्ड में पहले से तय होते हैं। पारंपरिक योजनाओं में एलआईसी द्वारा घोषित वार्षिक बोनस जुड़ता है।'
+    }
+  ],
+  testimonials: [
+    {
+      id: 'tst_1',
+      clientName: 'Sunil Verma',
+      location: 'Rohtak, Haryana',
+      serviceCategory: 'Child Higher Education Plan',
+      policySince: '2019',
+      commentEn: 'Sarla ji explained the child education plan with complete transparency. She never pressured us into a higher premium than we could afford. Her service during premium renewals is flawless.',
+      commentHi: 'सरला जी ने हमारे बच्चे की उच्च शिक्षा की योजना को बहुत ही स्पष्टता से समझाया। उन्होंने कभी भी हमारी क्षमता से अधिक प्रीमियम का दबाव नहीं बनाया। उनकी सर्विस बहुत ही विश्वसनीय है।',
+      consentConfirmed: true,
+      rating: 5
+    },
+    {
+      id: 'tst_2',
+      clientName: 'Rajesh K. Malik',
+      location: 'Jhajjar, Haryana',
+      serviceCategory: 'Maturity Claim & Term Cover',
+      policySince: '2015',
+      commentEn: 'When my father’s old policy matured, we faced document issues with the branch. Sarla Hooda stepped in and got our claim settled within 10 days. Truly an MDRT professional.',
+      commentHi: 'जब मेरे पिताजी की पुरानी पॉलिसी मैच्योर हुई तो बैंक शाखा में कुछ तकनीकी दिक्कत थी। सरला जी ने व्यक्तिगत रुचि लेकर केवल 10 दिनों में क्लेम दिलवाया।',
+      consentConfirmed: true,
+      rating: 5
+    },
+    {
+      id: 'tst_3',
+      clientName: 'Meenakshi Sharma',
+      location: 'Delhi NCR',
+      serviceCategory: 'Guaranteed Pension Plan',
+      policySince: '2021',
+      commentEn: 'We took a joint life pension plan after my husband retired. The monthly pension credits directly to our account without fail. Highly recommend her consultation.',
+      commentHi: 'मेरे पति के रिटायरमेंट के बाद हमने संयुक्त पेंशन योजना ली। हर महीने निश्चित समय पर पेंशन खाते में आ जाती है। सरला जी का व्यवहार बहुत ही शालीन और मददगार है।',
+      consentConfirmed: true,
+      rating: 5
+    }
+  ],
+  disclaimerEn: "Sarla Hooda is an independent licensed Insurance Advisor registered with the Life Insurance Corporation of India (LIC). This website is an independent client advisory and educational platform and does not constitute LIC's corporate web portal. Insurance is a subject matter of solicitation. Please read the official sales brochure carefully before concluding a sale.",
+  disclaimerHi: "सरला हुड्डा भारतीय जीवन बीमा निगम (LIC) की एक स्वतंत्र अधिकृत बीमा सलाहकार हैं। यह वेबसाइट केवल स्वतंत्र ग्राहक परामर्श और मार्गदर्शन के लिए है, यह एलआईसी की मुख्य कॉर्पोरेट वेबसाइट नहीं है। बीमा आग्रह की विषय वस्तु है। कृपया किसी भी पॉलिसी को लेने से पहले आधिकारिक विवरणिका को ध्यानपूर्वक पढ़ें।",
+  privacyNoticeEn: "We strictly respect your privacy. Personal information collected through enquiry forms is used solely to provide your requested insurance consultation and will never be sold, rented, or shared with unauthorized third parties.",
+  privacyNoticeHi: "हम आपकी गोपनीयता का पूर्ण सम्मान करते हैं। परामर्श फॉर्म के माध्यम से एकत्र की गई जानकारी का उपयोग केवल आपकी बीमा सलाह के लिए किया जाता है और इसे किसी अन्य व्यक्ति या संस्था को नहीं दिया जाता।"
+};
+
+// Seed message templates
+const initialMessageTemplates: MessageTemplate[] = [
+  {
+    id: 'tmpl_won_welcome',
+    category: 'DEAL_WON',
+    titleEn: 'Welcome & Thank You Message',
+    titleHi: 'स्वागत व धन्यवाद संदेश',
+    contentEn: 'Namaste [Customer Name] ji, thank you for placing your trust in me for your [Insurance Interest] policy. Your family\'s security is now protected. I have initiated the documentation process and will share your official policy bond as soon as it is generated. Please save my contact number for any policy assistance. Regards, Sarla Hooda (LIC Advisor)',
+    contentHi: 'नमस्ते [Customer Name] जी, अपनी [Insurance Interest] पॉलिसी के लिए मुझ पर विश्वास जताने के लिए आपका बहुत-बहुत धन्यवाद। आपके परिवार का भविष्य अब सुरक्षित है। आपके पॉलिसी दस्तावेज की प्रक्रिया शुरू हो गई है। किसी भी सेवा के लिए मेरा नंबर हमेशा अपने पास सुरक्षित रखें। सादर, सरला हुड्डा (एलआईसी बीमा सलाहकार)'
+  },
+  {
+    id: 'tmpl_won_anniversary',
+    category: 'DEAL_WON',
+    titleEn: 'Policy Anniversary Greeting',
+    titleHi: 'पॉलिसी वर्षगांठ बधाई',
+    contentEn: 'Namaste [Customer Name] ji, congratulations on completing another successful year of your LIC insurance plan! Your disciplined savings and family protection continue strong. If you need a premium statement or policy status update, feel free to message me anytime. Best regards, Sarla Hooda (LIC Advisor)',
+    contentHi: 'नमस्ते [Customer Name] जी, आपकी एलआईसी बीमा योजना का एक और सफल वर्ष पूरा होने पर हार्दिक बधाई! आपकी अनुशासित बचत और परिवार की सुरक्षा निरंतर बनी हुई है। यदि आपको प्रीमियम रसीद या पॉलिसी स्टेटस चाहिए तो मुझे कभी भी संदेश भेज सकते हैं। सादर, सरला हुड्डा'
+  },
+  {
+    id: 'tmpl_won_renewal',
+    category: 'RENEWAL',
+    titleEn: 'Policy Renewal Reminder',
+    titleHi: 'पॉलिसी प्रीमियम नवीनीकरण सूचना',
+    contentEn: 'Namaste [Customer Name] ji, gentle reminder regarding the upcoming premium due for your [Insurance Interest] plan. Timely payment ensures uninterrupted life cover and bonus accrual. Let me know if you need any assistance with online payment or receipt download. Regards, Sarla Hooda (LIC Advisor, +91 93503 04831)',
+    contentHi: 'नमस्ते [Customer Name] जी, आपकी [Insurance Interest] पॉलिसी के आगामी प्रीमियम भुगतान के लिए यह एक विनम्र सूचना है। समय पर प्रीमियम जमा करने से जीवन सुरक्षा और बोनस लाभ निरंतर बने रहते हैं। ऑनलाइन भुगतान में किसी भी सहायता के लिए संपर्क करें। सादर, सरला हुड्डा (+91 93503 04831)'
+  },
+  {
+    id: 'tmpl_lost_respectful',
+    category: 'DEAL_LOST',
+    titleEn: 'Respectful Reconnect (Non-Pushy)',
+    titleHi: 'सम्मानजनक पुनः संपर्क (बिना दबाव)',
+    contentEn: 'Hi [Customer Name] ji, I hope you are doing well. We previously discussed your insurance requirements for [Insurance Interest]. If you still need any clarification or would like to explore suitable options at your own pace, I would be happy to help. No pressure at all. Please let me know if you would like to connect. Warm regards, Sarla Hooda (MDRT Qualified LIC Advisor)',
+    contentHi: 'नमस्ते [Customer Name] जी, आशा है आप सपरिवार सकुशल होंगे। हमने पहले आपकी [Insurance Interest] संबंधी आवश्यकताओं पर चर्चा की थी। यदि आपको अभी भी कोई संदेह है या आप अपनी सुविधानुसार सही विकल्पों पर पुनर्विचार करना चाहते हैं, तो मुझे आपकी सहायता करने में खुशी होगी। कोई भी दबाव नहीं है। जब भी उचित समझें, संपर्क कर सकते हैं। सादर, सरला हुड्डा (एलआईसी सलाहकार)'
+  },
+  {
+    id: 'tmpl_cold_reconnect',
+    category: 'COLD_LEAD',
+    titleEn: 'Cold Lead Warm Reconnect',
+    titleHi: 'कोल्ड लीड पुनः संवाद',
+    contentEn: 'Namaste [Customer Name] ji, hope everything is well with you and your family. I was reviewing my advisory records from [Village/City] and recalled our conversation regarding [Insurance Interest]. LIC recently introduced updated terms and flexible savings options that might interest you. Would love to share brief details whenever convenient. Regards, Sarla Hooda',
+    contentHi: 'नमस्ते [Customer Name] जी, आशा है आप और आपका परिवार कुशलपूर्वक होंगे। [Village/City] के अपने रिकॉर्ड्स देखते हुए हमारी पिछली बातचीत याद आई जो [Insurance Interest] के संबंध में हुई थी। एलआईसी में हाल ही में कुछ नए और सुविधाजनक विकल्प आए हैं जो आपके लिए उपयोगी हो सकते हैं। जब भी आपको समय मिले, सूचित करें। सादर, सरला हुड्डा'
+  },
+  {
+    id: 'tmpl_followup_reminder',
+    category: 'FOLLOW_UP',
+    titleEn: 'Follow-up & Consultation Summary',
+    titleHi: 'फॉलो-अप व परामर्श सारांश',
+    contentEn: 'Namaste [Customer Name] ji, thank you for your enquiry regarding [Insurance Interest]. I have prepared a customized consultation overview addressing your requirements. Would you prefer a quick phone call today or should I share the summary points on WhatsApp? Best regards, Sarla Hooda (LIC Advisor, 93503 04831)',
+    contentHi: 'नमस्ते [Customer Name] जी, [Insurance Interest] के संबंध में जानकारी चाहने के लिए धन्यवाद। मैंने आपकी आवश्यकताओं के अनुसार एक स्पष्ट रूपरेखा तैयार की है। क्या आप आज फोन पर 5 मिनट बात करना पसंद करेंगे या मैं मुख्य बातें व्हाट्सएप पर साझा करूँ? सादर, सरला हुड्डा (93503 04831)'
+  }
+];
+
+// Realistic initial demo leads to demonstrate full CRM workflow immediately
+const initialDemoLeads: CustomerLead[] = [
+  {
+    id: 'lead_demo_1',
+    name: 'Vikram Singh',
+    phone: '+91 98123 45678',
+    email: 'vikram.singh@gmail.com',
+    villageCity: 'Rohtak, Haryana',
+    address: 'Sector 14, Rohtak',
+    preferredLanguage: 'hi',
+    insuranceInterest: 'Child Future & Higher Education',
+    budgetRange: '₹3,000 – ₹7,000 monthly',
+    paymentFrequency: 'Monthly (Automated ECS / NACH)',
+    planningTerm: 'Medium-term (10 to 16 years)',
+    intendedFor: 'My Child / Children',
+    priorityGoal: 'Education fund waiver if anything happens to me',
+    quizSummary: 'Focus on Child Future with Medium-term horizon (10-16 yrs). Priority: Premium Waiver Benefit.',
+    leadStatus: 'Follow-up Required',
+    dealStatus: 'Open',
+    source: 'Insurance Quiz',
+    preferredContactMethod: 'WhatsApp',
+    consentStatus: true,
+    consentTimestamp: '2026-09-28T10:15:00.000Z',
+    locationSharedVoluntarily: true,
+    createdAt: '2026-09-28T10:15:00.000Z',
+    updatedAt: '2026-10-12T09:30:00.000Z',
+    lastContactDate: '2026-10-02',
+    nextFollowUpDate: new Date().toISOString().slice(0, 10), // Today!
+    internalNotes: 'Client has an 8-year-old daughter. Looking for ₹25 Lakhs graduation fund at age 18. Shared Amritbaal illustration.',
+    followUpPriority: 'High'
+  },
+  {
+    id: 'lead_demo_2',
+    name: 'Anjali Sharma',
+    phone: '+91 94160 12345',
+    email: 'anjali.s@outlook.com',
+    villageCity: 'Jhajjar, Haryana',
+    preferredLanguage: 'en',
+    insuranceInterest: 'Retirement & Lifelong Pension',
+    budgetRange: '₹25,000 – ₹50,000+ annual lump-sum',
+    paymentFrequency: 'Yearly',
+    planningTerm: 'Long-term (16 to 25+ years)',
+    intendedFor: 'Myself (Primary Breadwinner)',
+    priorityGoal: 'Lifelong regular pension without market risk',
+    quizSummary: 'Focus on Retirement Pension with Long-term horizon. Priority: Zero market risk.',
+    leadStatus: 'Cold Lead',
+    dealStatus: 'Open',
+    source: 'Website Form',
+    preferredContactMethod: 'Phone Call',
+    consentStatus: true,
+    consentTimestamp: '2026-09-14T14:20:00.000Z',
+    locationSharedVoluntarily: true,
+    createdAt: '2026-09-14T14:20:00.000Z',
+    updatedAt: '2026-09-14T15:00:00.000Z',
+    lastContactDate: '2026-09-14', // Cold lead trigger!
+    nextFollowUpDate: '2026-09-28', // Overdue!
+    internalNotes: 'Government school teacher, planning retirement after 12 years. Interested in LIC Jeevan Shanti deferred annuity.',
+    followUpPriority: 'Medium'
+  },
+  {
+    id: 'lead_demo_3',
+    name: 'Devender Hooda',
+    phone: '+91 98960 78901',
+    villageCity: 'Bahadurgarh, Haryana',
+    preferredLanguage: 'hi',
+    insuranceInterest: 'Term & Pure Life Protection',
+    budgetRange: '₹1,500 – ₹3,000 monthly',
+    paymentFrequency: 'Yearly',
+    planningTerm: 'Long-term (16 to 25+ years)',
+    intendedFor: 'Myself (Primary Breadwinner)',
+    priorityGoal: 'Maximum life protection for minimal premium',
+    quizSummary: 'Focus on Family Protection & Life Cover. ₹1 Crore sum assured target.',
+    leadStatus: 'Deal Won',
+    dealStatus: 'Won',
+    source: 'WhatsApp Direct',
+    preferredContactMethod: 'WhatsApp',
+    consentStatus: true,
+    consentTimestamp: '2026-09-20T11:00:00.000Z',
+    createdAt: '2026-09-20T11:00:00.000Z',
+    updatedAt: '2026-10-05T16:00:00.000Z',
+    lastContactDate: '2026-10-05',
+    internalNotes: 'Policy completed: LIC Tech Term (₹1 Crore Cover, 35-year term). Bond delivered to client. First premium receipt shared.',
+    locationSharedVoluntarily: false
+  },
+  {
+    id: 'lead_demo_4',
+    name: 'Pooja Rani',
+    phone: '+91 97290 34567',
+    villageCity: 'Sampla, Rohtak',
+    preferredLanguage: 'hi',
+    insuranceInterest: 'Savings & Endowment',
+    budgetRange: '₹3,000 – ₹7,000 monthly',
+    paymentFrequency: 'Quarterly',
+    planningTerm: 'Medium-term (10 to 16 years)',
+    leadStatus: 'Deal Lost',
+    dealStatus: 'Lost',
+    source: 'Website Form',
+    preferredContactMethod: 'Either',
+    consentStatus: true,
+    consentTimestamp: '2026-09-10T12:00:00.000Z',
+    createdAt: '2026-09-10T12:00:00.000Z',
+    updatedAt: '2026-09-22T10:00:00.000Z',
+    lastContactDate: '2026-09-22',
+    internalNotes: 'Client faced unexpected medical expenses in the family and postponed the investment for 6 months. Maintain polite non-pushy relationship.',
+    locationSharedVoluntarily: true
+  },
+  {
+    id: 'lead_demo_5',
+    name: 'Amit Dahiya',
+    phone: '+91 98135 67890',
+    email: 'amit.dahiya@techmail.com',
+    villageCity: 'Gurugram, Haryana',
+    preferredLanguage: 'en',
+    insuranceInterest: 'Policy Servicing & Claim Help',
+    leadStatus: 'New Lead',
+    dealStatus: 'Open',
+    source: 'Website Form',
+    preferredContactMethod: 'Phone Call',
+    consentStatus: true,
+    consentTimestamp: '2026-10-13T18:30:00.000Z',
+    createdAt: '2026-10-13T18:30:00.000Z',
+    updatedAt: '2026-10-13T18:30:00.000Z',
+    nextFollowUpDate: new Date().toISOString().slice(0, 10),
+    internalNotes: 'Needs assistance with reviving father\'s 7-year lapsed LIC Jeevan Anand policy.',
+    locationSharedVoluntarily: true,
+    followUpPriority: 'High'
+  }
+];
+
+class DatabaseEngine {
+  private data: AppDatabaseSchema;
+  private isInitialized = false;
+
+  constructor() {
+    this.data = this.getDefaultSchema();
+    this.init();
+  }
+
+  private getDefaultSchema(): AppDatabaseSchema {
+    const salt = bcrypt.genSaltSync(10);
+    // Default secure password for Sarla Hooda admin login: SarlaMDRT2026!
+    const defaultPasswordHash = bcrypt.hashSync('SarlaMDRT2026!', salt);
+
+    return {
+      admins: [
+        {
+          id: 'admin_1',
+          email: 'sarla.hooda@licadvisor.in',
+          name: 'Sarla Hooda',
+          role: 'Super Admin',
+          passwordHash: defaultPasswordHash,
+          failedAttempts: 0,
+          lockUntil: null,
+          createdAt: new Date().toISOString()
+        }
+      ],
+      leads: initialDemoLeads,
+      activities: [
+        {
+          id: 'act_1',
+          leadId: 'lead_demo_1',
+          leadName: 'Vikram Singh',
+          type: 'FOLLOW_UP_SCHEDULED',
+          description: 'Scheduled follow-up for Child Higher Education Plan comparison.',
+          performedBy: 'Sarla Hooda',
+          timestamp: '2026-10-02T10:00:00.000Z'
+        },
+        {
+          id: 'act_2',
+          leadId: 'lead_demo_3',
+          leadName: 'Devender Hooda',
+          type: 'DEAL_UPDATE',
+          description: 'Deal marked as Won. ₹1 Crore LIC Tech Term issued successfully.',
+          performedBy: 'Sarla Hooda',
+          timestamp: '2026-10-05T16:00:00.000Z'
+        }
+      ],
+      messageTemplates: initialMessageTemplates,
+      websiteContent: initialWebsiteContent,
+      analyticsEvents: [
+        {
+          id: 'evt_1',
+          eventType: 'page_view',
+          timestamp: '2026-10-13T20:00:00.000Z',
+          source: 'direct'
+        },
+        {
+          id: 'evt_2',
+          eventType: 'quiz_start',
+          timestamp: '2026-10-13T20:05:00.000Z',
+          source: 'homepage_quiz'
+        },
+        {
+          id: 'evt_3',
+          eventType: 'quiz_complete',
+          timestamp: '2026-10-13T20:08:00.000Z',
+          source: 'homepage_quiz'
+        },
+        {
+          id: 'evt_4',
+          eventType: 'vcf_download',
+          timestamp: '2026-10-13T20:10:00.000Z',
+          source: 'popup'
+        }
+      ],
+      auditLogs: [
+        {
+          id: 'aud_1',
+          adminId: 'admin_1',
+          adminEmail: 'sarla.hooda@licadvisor.in',
+          action: 'SYSTEM_INITIALIZED',
+          targetResource: 'DatabaseEngine',
+          details: 'Initialized secure database schema with verified business credentials.',
+          timestamp: new Date().toISOString()
+        }
+      ]
+    };
+  }
+
+  private init() {
+    if (this.isInitialized) return;
+
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+
+      if (fs.existsSync(DB_FILE)) {
+        const fileContent = fs.readFileSync(DB_FILE, 'utf-8');
+        const parsed = JSON.parse(fileContent);
+        this.data = {
+          ...this.getDefaultSchema(),
+          ...parsed
+        };
+      } else {
+        this.save();
+      }
+      this.isInitialized = true;
+    } catch (err) {
+      console.error('Error loading database file, initializing default:', err);
+      this.data = this.getDefaultSchema();
+      this.save();
+      this.isInitialized = true;
+    }
+  }
+
+  public save(): boolean {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      // Atomic write using temporary file
+      const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
+      fs.writeFileSync(tempFile, JSON.stringify(this.data, null, 2), 'utf-8');
+      fs.renameSync(tempFile, DB_FILE);
+      return true;
+    } catch (err) {
+      console.error('Failed to atomically write database file:', err);
+      return false;
+    }
+  }
+
+  // --- Leads Accessors & Mutations ---
+  public getLeads(): CustomerLead[] {
+    return this.data.leads;
+  }
+
+  public getLeadById(id: string): CustomerLead | undefined {
+    return this.data.leads.find(l => l.id === id);
+  }
+
+  public createLead(leadData: Omit<CustomerLead, 'id' | 'createdAt' | 'updatedAt'>): CustomerLead {
+    const newLead: CustomerLead = {
+      ...leadData,
+      id: `lead_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    this.data.leads.unshift(newLead);
+    this.save();
+    return newLead;
+  }
+
+  public updateLead(id: string, updates: Partial<CustomerLead>): CustomerLead | null {
+    const index = this.data.leads.findIndex(l => l.id === id);
+    if (index === -1) return null;
+
+    this.data.leads[index] = {
+      ...this.data.leads[index],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    this.save();
+    return this.data.leads[index];
+  }
+
+  public deleteLead(id: string): boolean {
+    const initialLen = this.data.leads.length;
+    this.data.leads = this.data.leads.filter(l => l.id !== id);
+    if (this.data.leads.length !== initialLen) {
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
+  // --- Activities ---
+  public getActivities(leadId?: string): LeadActivity[] {
+    if (leadId) {
+      return this.data.activities.filter(a => a.leadId === leadId).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    }
+    return this.data.activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  public addActivity(activity: Omit<LeadActivity, 'id' | 'timestamp'>): LeadActivity {
+    const newActivity: LeadActivity = {
+      ...activity,
+      id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString()
+    };
+    this.data.activities.unshift(newActivity);
+    this.save();
+    return newActivity;
+  }
+
+  // --- Content & Settings ---
+  public getContent(): WebsiteContent {
+    return this.data.websiteContent;
+  }
+
+  public updateContent(updates: Partial<WebsiteContent>): WebsiteContent {
+    this.data.websiteContent = {
+      ...this.data.websiteContent,
+      ...updates,
+      advisor: {
+        ...this.data.websiteContent.advisor,
+        ...(updates.advisor || {})
+      }
+    };
+    this.save();
+    return this.data.websiteContent;
+  }
+
+  // --- Message Templates ---
+  public getTemplates(): MessageTemplate[] {
+    return this.data.messageTemplates;
+  }
+
+  public updateTemplate(id: string, updates: Partial<MessageTemplate>): MessageTemplate | null {
+    const index = this.data.messageTemplates.findIndex(t => t.id === id);
+    if (index === -1) return null;
+    this.data.messageTemplates[index] = {
+      ...this.data.messageTemplates[index],
+      ...updates
+    };
+    this.save();
+    return this.data.messageTemplates[index];
+  }
+
+  public createTemplate(template: Omit<MessageTemplate, 'id'>): MessageTemplate {
+    const newTemplate: MessageTemplate = {
+      ...template,
+      id: `tmpl_${Date.now()}`
+    };
+    this.data.messageTemplates.push(newTemplate);
+    this.save();
+    return newTemplate;
+  }
+
+  public deleteTemplate(id: string): boolean {
+    const len = this.data.messageTemplates.length;
+    this.data.messageTemplates = this.data.messageTemplates.filter(t => t.id !== id);
+    if (this.data.messageTemplates.length !== len) {
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
+  // --- Analytics ---
+  public recordAnalyticsEvent(event: Omit<AnalyticsEvent, 'id' | 'timestamp'>): AnalyticsEvent {
+    const newEvt: AnalyticsEvent = {
+      ...event,
+      id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString()
+    };
+    this.data.analyticsEvents.push(newEvt);
+    // Keep max 20,000 analytics events to prevent unbounded growth
+    if (this.data.analyticsEvents.length > 20000) {
+      this.data.analyticsEvents = this.data.analyticsEvents.slice(-10000);
+    }
+    this.save();
+    return newEvt;
+  }
+
+  public getAnalyticsEvents(): AnalyticsEvent[] {
+    return this.data.analyticsEvents;
+  }
+
+  // --- Audit Logs ---
+  public logAudit(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): AuditLogEntry {
+    const newLog: AuditLogEntry = {
+      ...entry,
+      id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString()
+    };
+    this.data.auditLogs.unshift(newLog);
+    // Keep max 5,000 audit logs
+    if (this.data.auditLogs.length > 5000) {
+      this.data.auditLogs = this.data.auditLogs.slice(0, 5000);
+    }
+    this.save();
+    return newLog;
+  }
+
+  public getAuditLogs(): AuditLogEntry[] {
+    return this.data.auditLogs;
+  }
+
+  // --- Admin User Auth ---
+  public getAdminByEmail(email: string): StoredAdminUser | undefined {
+    return this.data.admins.find(a => a.email.toLowerCase() === email.toLowerCase());
+  }
+
+  public getAdminById(id: string): StoredAdminUser | undefined {
+    return this.data.admins.find(a => a.id === id);
+  }
+
+  public updateAdmin(id: string, updates: Partial<StoredAdminUser>): StoredAdminUser | null {
+    const index = this.data.admins.findIndex(a => a.id === id);
+    if (index === -1) return null;
+    this.data.admins[index] = {
+      ...this.data.admins[index],
+      ...updates
+    };
+    this.save();
+    return this.data.admins[index];
+  }
+}
+
+export const db = new DatabaseEngine();

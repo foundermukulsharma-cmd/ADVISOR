@@ -1,0 +1,6 @@
+{
+  "name": "Sarla Hooda - LIC Insurance Consultant & Smart CRM",
+  "description": "Official digital insurance advisory platform and smart CRM for Sarla Hooda, MDRT Qualified LIC Insurance Advisor serving 700+ families with personalized life, retirement, and child education planning.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
